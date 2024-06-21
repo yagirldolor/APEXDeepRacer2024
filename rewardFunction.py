@@ -32,6 +32,8 @@ class PARAMS:
     prev_steps = None
     prev_direction_diff = None
     prev_steering_angle = None
+    prev_progress = None
+    prev_track_direction = None
 
 
 def reward_function(params):
@@ -47,6 +49,7 @@ def reward_function(params):
     heading = params['heading']
     steering_angle = params['steering_angle']
     speed = params['speed']
+    progress = params['progress']
 
 
     # Initialize the reward with typical value
@@ -57,6 +60,8 @@ def reward_function(params):
         PARAMS.prev_speed = None
         PARAMS.prev_direction_diff = None
         PARAMS.prev_steering_angle = None
+        PARAMS.prev_progress = None
+        PARAMS.prev_track_direction = None
     
 
     ####### Closest waypoints for direction diff (track_direction - heading)
@@ -75,21 +80,37 @@ def reward_function(params):
     DIRECTION_THRESHOLD = 10.0
     if direction_diff > DIRECTION_THRESHOLD:
         reward *= 0.5
-
+    
     ######Speed Reduction 
     speed_reduced = False
     if PARAMS.prev_speed is not None:
         if PARAMS.prev_speed > speed:
             speed_reduced = True
 
-    # Penalize for  slowing down
-    #if speed_reduced is True and track_turn is False:
-    #
+    if PARAMS.prev_track_direction is not None:
+        track_turn = True
+    #penalize if speed_reduced is True and track_turn is False:
+    if speed_reduced is True and track_turn is False:
+        reward *= .8
+    #reward if speed_reduced is True and track_turn is True:
+    if speed_reduced is True and track_turn is True:
+        reward += 5
+    #reward if speed_reduced is False and track_turn is False:  
+    if speed_reduced is False and track_turn is False:
+        reward += 3
+
+    ##### Steps and Progress, reward if car passes every n steps faster than expected??
+    # Total num of steps we want the car to finish the lap, it will vary depends on the track length
+    TOTAL_NUM_STEPS = 300 #this should be according to our track
+    # Give additional reward if the car pass every 100 steps faster than expected
+    if (steps % 100) == 0 and progress > (steps / TOTAL_NUM_STEPS) * 100 :
+        reward += 10.0
+
 
     ######Steering (avoid zigzag)
     if PARAMS.prev_steering_angle is not None:
         #compair prev steering to current and compute 
-        abs_sterring = 100
+        abs_steering = 100
 
     abs_steering = abs(steering_angle)
     # Penalize for steering too much
@@ -97,6 +118,14 @@ def reward_function(params):
     if abs_steering > ABS_STEERING_THRESHOLD:
         reward *= 0.8
 
+
+    ##### Update variables
+        PARAMS.prev_steps = steps
+        PARAMS.prev_speed = speed
+        PARAMS.prev_direction_diff = direction_diff
+        PARAMS.prev_steering_angle = steering_angle
+        PARAMS.prev_progress = None
+        PARAMS.prev_track_direction = None
     
 
     return float(reward)
