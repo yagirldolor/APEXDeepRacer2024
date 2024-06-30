@@ -52,7 +52,9 @@ def reward_function(params):
     steering_angle = params['steering_angle']
     speed = params['speed']
     progress = params['progress']
-
+    is_offtrack = params['is_offtrack']
+    agent_x = params['x']
+    agent_y = params['y']
 
     # Initialize the reward with typical value
     reward = 1.0
@@ -67,7 +69,7 @@ def reward_function(params):
     
 
     ####### Closest waypoints for direction diff (track_direction - heading)
-    # Calculate the direction of the center line based on the closest waypoints
+    # Calculate the direction of the racing line based on the closest waypoints
     next_point = race_line[closest_waypoints[1]]
     prev_point = race_line[closest_waypoints[0]]
     # Calculate the direction in radius, arctan2(dy, dx), the result is (-pi, pi) in radians
@@ -83,6 +85,7 @@ def reward_function(params):
     if direction_diff > DIRECTION_THRESHOLD:
         reward *= 0.5
     
+    
     ######Speed Reduction 
     speed_reduced = False
     if PARAMS.prev_speed is not None:
@@ -90,7 +93,8 @@ def reward_function(params):
             speed_reduced = True
 
     if PARAMS.prev_track_direction is not None:
-        track_turn = True
+        if (abs(PARAMS.prev_track_direction) - abs(track_direction)) > 0: #check this logic 
+            track_turn = True
     #penalize if speed_reduced is True and track_turn is False:
     if speed_reduced is True and track_turn is False:
         reward *= .8
@@ -101,33 +105,74 @@ def reward_function(params):
     if speed_reduced is False and track_turn is False:
         reward += 3
 
-    ##### Steps and Progress, reward if car passes every n steps faster than expected??
-    # Total num of steps we want the car to finish the lap, it will vary depends on the track length
-    TOTAL_NUM_STEPS = 300 #this should be according to our track
-    # Give additional reward if the car pass every 100 steps faster than expected
-    if (steps % 100) == 0 and progress > (steps / TOTAL_NUM_STEPS) * 100 :
-        reward += 10.0
-
-
     ######Steering (avoid zigzag)
-    if PARAMS.prev_steering_angle is not None:
-        #compair prev steering to current and compute 
-        steering_angle_diff = abs(PARAMS.prev_steering_angle) 
-
     abs_steering = abs(steering_angle)
     # Penalize for steering too much
     ABS_STEERING_THRESHOLD = 20.0
     if abs_steering > ABS_STEERING_THRESHOLD:
         reward *= 0.8
 
+    #has steering changed significantly from prev_steering_angle
+    ##################################check this logic
+    significant_steering_diff = False
+    is_heading_right = True
+    if direction_diff < 20:
+        is_heading_right = False
+    if PARAMS.prev_steering_angle is not None:
+        if not(math.isclose(PARAMS.prev_steering_angle,steering_angle)):
+            significant_steering_diff = True
+    #Reward for not changing angle when heading in right direction
+    if is_heading_right and significant_steering_diff is False:
+        if direction_diff < 8:
+            reward *= 2
+        if direction_diff < 4:
+            reward *= 2.5
+        if PARAMS.prev_direction_diff is not None and PARAMS.prev_direction_diff > direction_diff:
+            reward *= 3
 
+
+    #######commenting this out, as it seems we should train with our reward function before we can determine this??
+    ##### Steps and Progress, reward if car passes every n steps faster than expected??
+    # Total num of steps we want the car to finish the lap, it will vary depends on the track length
+    #TOTAL_NUM_STEPS = 300 #this should be according to our track (length: 46.16 meters, width: 1.07 meters)
+    # Give additional reward if the car pass every 100 steps faster than expected
+    #if (steps % 100) == 0 and progress > (steps / TOTAL_NUM_STEPS) * 100 :
+    #    reward += 10.0
+            
     ##### Update variables
         PARAMS.prev_steps = steps
         PARAMS.prev_speed = speed
         PARAMS.prev_direction_diff = direction_diff
         PARAMS.prev_steering_angle = steering_angle
         PARAMS.prev_progress = None
-        PARAMS.prev_track_direction = None
+        PARAMS.prev_track_direction = track_direction
+            
+    ###############################################################################
+    #######Penalize if agent is off track
+    if is_offtrack is True:
+        reward *= 0.5
+    
+    #######Following close to the racing line averaged
+    total_following_distance = 0
+    following_treshold = 1
+
+    for race_line_x, race_line_y in race_line:
+        distance_to_race_line_point = math.sqrt((agent_x - race_line_x)**2 + (agent_y - race_line_y)**2)
+        total_following_distance += distance_to_race_line_point
+
+    average_following_distance = total_following_distance / len(race_line)
+    
+    #reward following close to race line
+    if average_following_distance < following_treshold:
+        reward += 2
+    #penalize if average following distance from race line is greater than 1
+    else:
+        reward += 0
+
+
+    #######Check if agent is within left or ride side of track
+
+    
     
 
     return float(reward)
