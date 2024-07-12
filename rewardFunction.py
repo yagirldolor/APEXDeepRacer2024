@@ -98,8 +98,6 @@ def reward_function(params):
     if crashed:
         return -1000
 
-    if not left_of_center:
-        reward = reward - 40
 
     # Reintialize previous parameters
     if PREV.steps is None or steps < PREV.steps:
@@ -138,6 +136,15 @@ def reward_function(params):
                         reward = reward - 40
                     else:
                         reward = reward + 10
+
+    if closest_waypoints[1] in range(65,82):
+        if not left_of_center:
+            reward = reward + 40
+    elif closest_waypoints[1] in range(58,65) or range(81, 92):
+        pass
+    else:
+        if left_of_center:
+            reward = reward + 40
 
     # Penalize the reward if the difference is too large
     # DIRECTION_THRESHOLD = 10.0
